@@ -1,0 +1,34 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node
+node_modules/
+package-lock.json
+yarn.lock
+
+# Python
+__pycache__/
+*.pyc
+
+# IDA
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
+*.idb
+*.i64
+
+# Patched binaries
+*.patched
+
+# Claude Code
+.claude/
