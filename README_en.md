@@ -10,12 +10,12 @@ Designed for **IDA-NO-MCP** — export decompiled results from IDA, then analyze
 
 ## Included Skills
 
-| Skill | Description |
-|-------|-------------|
-| deobf-cff | Recover original control flow from flattened (CFF/OLLVM-style) functions |
-| deobf-indirect | Resolve indirect branches and calls to their real targets |
-| deobf-bcf | Identify and remove bogus control flow and opaque predicates |
-| deobf-string | Decrypt and recover obfuscated strings |
+| Skill | Description | Dev | Test |
+|-------|-------------|:---:|:----:|
+| deobf-cff | Recover original control flow from flattened (CFF/OLLVM-style) functions | | |
+| deobf-indirect | Resolve indirect branches and calls to their real targets | ✅ | ✅ |
+| deobf-bcf | Identify and remove bogus control flow and opaque predicates | | |
+| deobf-string | Decrypt and recover obfuscated strings | | |
 
 ## Usage Example
 
