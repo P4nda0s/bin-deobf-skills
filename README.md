@@ -13,7 +13,7 @@
 | deobf-cff | 从平坦化（CFF/OLLVM 风格）函数中恢复原始控制流 | | |
 | deobf-indirect | 解析间接跳转和间接调用的真实目标 | ✅ | ✅ |
 | deobf-bcf | 识别并移除虚假控制流和不透明谓词 | | |
-| deobf-string | 解密和恢复被混淆的字符串 | | |
+| deobf-string | 解密和恢复被混淆的字符串 | ✅ | ✅ |
 
 ## 使用示例
 
