@@ -18,7 +18,7 @@
 ## 使用示例
 
 ```
-deobf-indirect 反混淆 xxx.elf 的 0x45614 函数
+deobf-indirect 反混淆 tests/goron-indbr-miniz-example2 的 main 函数
 ```
 
 ## 安装
