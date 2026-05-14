@@ -62,12 +62,94 @@ B    B    ; otherwise jump to B
 
 Two instructions = 8 bytes, overwriting the `CSEL` (4 bytes) and the next junk instruction (4 bytes).
 
+## Part 2: CSET + BR Indirect Branch Pattern (Jump Table Variant)
+
+### Pattern Recognition
+
+Unlike the CSEL variant in Part 1, the CSET variant uses a 0/1 index to look up a jump table for computing the target address. The code between CSET and BR is NOT all junk — it contains useful instructions that subsequent basic blocks depend on.
+
+Typical instruction sequence:
+
+```asm
+CMP             X27, X8
+CSET            W8, EQ              ; W8 = 0 or 1 (index)
+STR             W8, [SP, #offset]   ; store index (junk)
+LDR             X9, [SP, #tbl_off]  ; load jump table pointer (junk)
+LDR             X8, [X9, W8, UXTW#3] ; table[index] (junk)
+ADRP            X9, #page           ; load encrypted constant (junk)
+LDR             W9, [X9, #off]      ;   (junk)
+MOV             W10, #imm           ; XOR key (junk)
+MOVK            W10, #imm, LSL#16   ;   (junk)
+EOR             W9, W9, W10         ; decrypt offset (junk)
+NEG             W9, W9              ; negate (junk)
+ADD             X8, X8, W9, SXTW    ; final target address (junk, boundary)
+; --- useful code below ---
+ADRP            X25, #0x100004000   ; register setup for successor blocks
+ADD             X25, X25, #0x250
+MOV             W28, #0xF065        ; constant init
+MOVK            W28, #0x611A, LSL#16
+LDR             X23, [SP, #0x50]    ; load state for successor
+BR              X8                   ; indirect jump (junk)
+```
+
+### Junk Code Identification
+
+`ADD Xn, Xn, Wm, SXTW` is the boundary between junk and useful code. Everything from CSET to ADD (inclusive) is junk:
+
+| Instruction | Purpose | Classification |
+|-------------|---------|----------------|
+| `CSET Wd, cond` | Set 0/1 index | junk (replaced by patch) |
+| `STR Wd, [SP, #off]` | Store index value | junk (only used by jump table) |
+| `LDR Xn, [base, #off]` | Load jump table pointer | junk |
+| `LDR Xm, [Xn, Wd, UXTW#3]` | Table lookup table[index] | junk |
+| `ADRP + LDR Wn` | Load encrypted constant | junk |
+| `MOV + MOVK Wm` | XOR decryption key | junk |
+| `EOR Wn, Wn, Wm` | Decrypt offset | junk |
+| `NEG Wn, Wn` | Negate | junk |
+| `ADD Xm, Xm, Wn, SXTW` | Compute final address | junk (**boundary**) |
+| Subsequent MOV/LDR/STR/ADRP+ADD | Register and stack state init | **useful** |
+| `BR Xm` | Indirect jump | junk (replaced by patch) |
+
+### Analysis Approach
+
+Same as the CSEL variant: symbolic execution forces CSET to take 1 and 0 respectively, runs until BR to obtain two target addresses.
+
+One difference: a single basic block may contain multiple CSEL/CSET instructions (e.g., a data-selection CSEL followed by a branch-controlling CSET). The script forces selection on every CSEL/CSET encountered; the recorded `csel_addr` is the last one (the one that controls the BR target).
+
+### Patching Strategy
+
+Cannot patch directly at the CSET location (would skip useful code). Correct approach:
+
+1. Locate `ADD Xn, Xn, Wm, SXTW` (the boundary)
+2. Extract useful code bytes between ADD+4 and BR
+3. Move useful code up to the CSET location
+4. Append `Bcond A; B B` immediately after
+
+```
+Before:  [CSET][junk...][ADD][useful code][BR]
+After:   [useful code][Bcond A][B B][... dead code ...]
+```
+
+Prerequisite: useful code must be position-independent (SP-relative addressing, immediate assignments, or same-page ADRP). Moving ADRP within the same 4KB page requires no immediate adjustment.
+
 ### Reference Implementation
 
-See `script/deinbr-v3.py` for the core workflow:
+Two script variants for different obfuscation sub-patterns:
+
+#### `script/deinbr-v3-csel.py` — CSEL variant (ELF)
+
+For binaries where `CSEL` directly selects between two target addresses and the code between CSEL and BR is pure address calculation junk. Patches 8 bytes at the CSEL location (Bcond + B), overwriting CSEL and the next junk instruction.
+
+#### `script/deinbr-v3-cset.py` — CSET variant (Mach-O / ELF)
+
+For binaries where `CSET` sets a 0/1 index and the code between CSET and BR contains **useful side-effect instructions** (register setup, stack stores for subsequent blocks) interleaved with address calculation junk.
+
+Patching strategy: find `ADD Xn, Xn, Wm, SXTW` (last address calculation step), move the useful code (between ADD and BR) up to the CSET location, then append Bcond + B. This preserves register/memory state that successor blocks depend on. The moved instructions must be position-independent (SP-relative, immediates, or same-page ADRP).
+
+Both scripts share the same core workflow:
 
 1. `analyze_br(proj, func_start)` — BFS traversal, collects all patch points
-2. `run_until_br(proj, state, csel_selector)` — execute from a given state until BR, forcing CSEL selection
+2. `run_until_br(proj, state, csel_selector)` — execute from a given state until BR, forcing CSEL/CSET selection
 3. `do_patch(binary_path, save_path, proj, patch_list)` — assemble patches with keystone and write to binary
 
 Key angr options:
